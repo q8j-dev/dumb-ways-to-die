@@ -151,7 +151,28 @@ document.createElement = function (tagName) {
 
         Object.defineProperty(element, 'src', {
             set: function (value) {
-                if (isSameDomain(value)) {
+                const gdSdkUrl = "https://html5.api.gamedistribution.com/main.min.js";
+                if (value === gdSdkUrl || (typeof value === 'string' && value.includes('gamedistribution.com/main.min.js'))) {
+                    console.log("REDIRECTING GD SDK TO STUB");
+                    const gdSdkStub = `
+                        console.log("GD SDK STUB LOADED");
+                        window.gdsdk = {
+                            init: function() { console.log("Stub gdsdk.init called"); },
+                            showAd: function() { 
+                                console.log("Stub gdsdk.showAd called"); 
+                                return Promise.resolve(); 
+                            },
+                            openConsole: function() { console.log("Stub gdsdk.openConsole called"); },
+                            on: function(name, callback) { console.log("Stub gdsdk.on called for", name); },
+                        };
+                        setTimeout(() => {
+                            document.dispatchEvent(new CustomEvent('gamedistribution_ready'));
+                            console.log("SENT gamedistribution_ready EVENT");
+                        }, 100);
+                    `;
+                    const gdSdkDataUrl = "data:application/javascript," + encodeURIComponent(gdSdkStub);
+                    originalSrcDescriptor.set.call(this, gdSdkDataUrl);
+                } else if (isSameDomain(value)) {
                     originalSrcDescriptor.set.call(this, value);
                 } else {
                     console.log("BLOCKED SCRIPT:", value);
