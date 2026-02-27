@@ -155,20 +155,62 @@ document.createElement = function (tagName) {
                 if (value === gdSdkUrl || (typeof value === 'string' && value.includes('gamedistribution.com/main.min.js'))) {
                     console.log("REDIRECTING GD SDK TO STUB");
                     const gdSdkStub = `
-                        console.log("GD SDK STUB LOADED");
-                        window.gdsdk = {
-                            init: function() { console.log("Stub gdsdk.init called"); },
-                            showAd: function() { 
-                                console.log("Stub gdsdk.showAd called"); 
-                                return Promise.resolve(); 
-                            },
-                            openConsole: function() { console.log("Stub gdsdk.openConsole called"); },
-                            on: function(name, callback) { console.log("Stub gdsdk.on called for", name); },
-                        };
-                        setTimeout(() => {
-                            document.dispatchEvent(new CustomEvent('gamedistribution_ready'));
-                            console.log("SENT gamedistribution_ready EVENT");
-                        }, 100);
+                        (function() {
+                            console.log("ULTIMATE EXHAUSTIVE GD SDK STUB LOADED");
+                            
+                            const listeners = {};
+
+                            const createStub = (name) => {
+                                const stub = function(...args) {
+                                    console.log("GD SDK CALL:", name, args);
+                                    const promise = Promise.resolve(stub);
+                                    return new Proxy(promise, handler(name + "()"));
+                                };
+                                
+                                const handler = (path) => ({
+                                    get: (target, prop) => {
+                                        if (prop === 'then') return target.then.bind(target);
+                                        if (prop === 'on') return (n, c) => {
+                                            if (!listeners[n]) listeners[n] = [];
+                                            listeners[n].push(c);
+                                            console.log("GD SDK ON:", n);
+                                        };
+                                        if (prop === 'emit') return (n, d) => {
+                                            if (listeners[n]) listeners[n].forEach(fn => fn(d));
+                                        };
+                                        
+                                        const newPath = path + "." + String(prop);
+                                        console.log("GD SDK ACCESS:", newPath);
+                                        return createStub(newPath);
+                                    },
+                                    apply: (target, thisArg, args) => {
+                                        console.log("GD SDK CALL:", path, args);
+                                        return createStub(path + "()");
+                                    },
+                                    construct: (target, args) => {
+                                        console.log("GD SDK CONSTRUCT:", path, args);
+                                        return createStub(path);
+                                    }
+                                });
+
+                                return new Proxy(stub, handler(name));
+                            };
+
+                            window.gdsdk = createStub("gdsdk");
+                            
+                            // Static properties for common expectations
+                            window.gdsdk.items = [];
+                            window.gdsdk.store = createStub("gdsdk.store");
+
+                            // Signal that the SDK is "ready"
+                            setTimeout(() => {
+                                document.dispatchEvent(new CustomEvent('gamedistribution_ready'));
+                                if (listeners['SDK_READY']) {
+                                    listeners['SDK_READY'].forEach(fn => fn());
+                                }
+                                console.log("SENT ULTIMATE ready signals");
+                            }, 100);
+                        })();
                     `;
                     const gdSdkDataUrl = "data:application/javascript," + encodeURIComponent(gdSdkStub);
                     originalSrcDescriptor.set.call(this, gdSdkDataUrl);
